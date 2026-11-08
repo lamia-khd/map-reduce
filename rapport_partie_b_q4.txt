@@ -1,0 +1,84 @@
+================================================================================
+TP 2 - PARTIE B : EXERCICE 1 - QUESTION 4
+SUIVI DU JOB MAPREDUCE DANS L'INTERFACE YARN & METRIQUES OBTENUES
+================================================================================
+
+1. CONTEXTE ET RAPPEL DE LA QUESTION
+--------------------------------------------------------------------------------
+Énoncé :
+"4. Suivez le job dans l'interface YARN (http://localhost:8088) et notez le nombre de tâches
+map, de tâches reduce, ainsi que les compteurs Map input records, Map output records et
+Reduce output records.
+Le répertoire de sortie ne doit pas exister avant le lancement d'un job. Supprimez-le avec 
+hdfs dfs -rm -r output_<nom>."
+
+Jeu de données utilisé : purchases.txt (taille : 211 312 924 octets, soit ~201.5 Mo)
+Stocké dans HDFS sous   : /user/root/input/purchases.txt (ou /user/root/tp2/data/purchases.txt)
+Classe Driver exécutée  : hadoop.mapreduce.tp2.PaymentJob (tp2.jar)
+ID de l'application YARN: application_1794091488521_0001
+ID du Job MapReduce     : job_1794091488521_0001
+
+
+2. ÉTAPES RÉALISÉES POUR L'EXÉCUTION DU JOB
+--------------------------------------------------------------------------------
+Étape 1 : Nettoyage du répertoire de sortie dans HDFS
+Command :
+    hdfs dfs -rm -r -f /tmp/test_output_payment
+
+Étape 2 : Lancement du job MapReduce sur le cluster Hadoop
+Command :
+    hadoop jar /root/tp2.jar hadoop.mapreduce.tp2.PaymentJob /user/root/input/purchases.txt /tmp/test_output_payment
+
+Étape 3 : Suivi de l'application dans l'interface Web YARN ResourceManager
+URL consultée : http://localhost:8088 (ou http://localhost:8088/cluster/app/application_1794091488521_0001)
+Statut final  : SUCCEEDED
+Progression   : map 100% reduce 100%
+
+
+3. RÉPONSES AUX MÉTRIQUES DEMANDÉES (VALEURS EXACTES DU JOB)
+--------------------------------------------------------------------------------
+
+A. Nombre de tâches Map et Reduce :
+   - Nombre de splits d'entrée : 2
+     (Le fichier purchases.txt fait 201.5 Mo et la taille de bloc HDFS par défaut est 128 Mo,
+      donc Hadoop divise le fichier en 2 splits : split 0 de 128 Mo et split 1 de 73.5 Mo).
+   - Nombre de tâches Map      : 2 tâches map actives (2 maps exécutées jusqu'au bout, 1 retry d'initialisation).
+   - Nombre de tâches Reduce   : 1 tâche reduce (valeur par défaut pour 1 reduceur unique).
+
+B. Compteurs d'enregistrements (Records Counters) :
+   - Map input records         : 4 138 476
+     (Correspond exactement aux 4 138 476 lignes de transactions présentes dans purchases.txt).
+
+   - Map output records        : 4 138 476
+     (Toutes les lignes de purchases.txt sont valides et ont 6 colonnes, donc 4 138 476 paires
+      (mode_de_paiement, 1) ont été émises par le mapper).
+
+   - Reduce output records     : 5
+     (Correspond aux 5 modes de paiement distincts trouvés dans le jeu de données).
+
+
+4. DÉTAIL DES COMPTEURS SUPPLÉMENTAIRES (POUR LE RAPPORT)
+--------------------------------------------------------------------------------
+   - Combine input records     : 4 138 476
+   - Combine output records    : 10
+     (Grâce au Combiner 'SumReducer' exécuté localement sur les 2 maps, les 4.1M records
+      ont été pré-agrégés en seulement 5 tuples par map = 10 records envoyés au reduceur).
+   - Reduce input records      : 10
+   - Reduce input groups       : 5
+   - Reduce shuffle bytes      : 142 bytes
+   - QUALITY.MALFORMED_LINES   : 0 (sur le fichier propre purchases.txt)
+   - Données HDFS lues         : 211 317 020 bytes (~201.5 Mo)
+   - Données HDFS écrites      : 70 bytes
+
+
+5. VÉRIFICATION DU FICHIER DE SORTIE FINAL (part-r-00000)
+--------------------------------------------------------------------------------
+Contenu du résultat produit :
+Amex         826535
+Cash         828770
+Discover     827426
+MasterCard   828524
+Visa         827221
+Total        4 138 476 achats
+================================================================================
+
