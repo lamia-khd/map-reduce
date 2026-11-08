@@ -73,6 +73,9 @@ public class PaymentJob {
         job.setCombinerClass(SumReducer.class); 
         job.setReducerClass(SumReducer.class);
         
+        // Question 4 : Utiliser 3 taches reduce
+        job.setNumReduceTasks(3);
+
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(IntWritable.class);
         
