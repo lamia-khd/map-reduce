@@ -8,3 +8,5 @@ Projet Hadoop MapReduce (TP2 Big Data).
 - `start_hadoop_cluster.bat` : Script automatisé pour lancer le cluster Hadoop et tester le job.
 - `rapport_partie_b_q4.txt` : Rapport détaillé pour la Question 4 de la Partie B.
 - `rapport_exercice1.txt` : Réponses complètes aux 4 questions de l'Exercice 1.
+- `rapport_exercice2.txt` : Réponses complètes aux questions et implémentation de l'Exercice 2 (Statistiques par catégorie).
+
