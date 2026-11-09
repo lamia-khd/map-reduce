@@ -2,3 +2,13 @@ target/
 *.jar
 cp.txt
 .vscode/
+
+
+classpath.txt
+*.pdf
+*.bat
+*.ps1
+generate_screenshots.py
+make_pdf_report.py
+output_local/
+*.crc

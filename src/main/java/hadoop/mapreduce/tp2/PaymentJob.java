@@ -64,13 +64,28 @@ public class PaymentJob {
         }
 
         Configuration conf = new Configuration();
+        
+        // Si aucun cluster externe n'est defini, activer le LocalJobRunner pour l'execution locale depuis l'IDE
+        if (conf.get("mapreduce.framework.name") == null) {
+            conf.set("mapreduce.framework.name", "local");
+        }
+        if (conf.get("fs.defaultFS") == null) {
+            conf.set("fs.defaultFS", "file:///");
+        }
+
         Job job = Job.getInstance(conf, "Payment Count");
         
         job.setJarByClass(PaymentJob.class);
         job.setMapperClass(PaymentMapper.class);
         
-        // Use the reducer as the combiner as requested
-        job.setCombinerClass(SumReducer.class); 
+        // Control combiner via system property or 3rd argument
+        boolean useCombiner = true;
+        if (args.length >= 3) {
+            useCombiner = Boolean.parseBoolean(args[2]);
+        }
+        if (useCombiner) {
+            job.setCombinerClass(SumReducer.class); 
+        }
         job.setReducerClass(SumReducer.class);
         
         // Question 4 : Utiliser 3 taches reduce

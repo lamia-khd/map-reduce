@@ -81,6 +81,12 @@ public class ProductStatsJob {
         }
 
         Configuration conf = new Configuration();
+        if (conf.get("mapreduce.framework.name") == null) {
+            conf.set("mapreduce.framework.name", "local");
+        }
+        if (conf.get("fs.defaultFS") == null) {
+            conf.set("fs.defaultFS", "file:///");
+        }
         Job job = Job.getInstance(conf, "Product Statistics (Without Combiner)");
 
         job.setJarByClass(ProductStatsJob.class);
