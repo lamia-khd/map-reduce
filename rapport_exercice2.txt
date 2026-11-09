@@ -1,118 +1,38 @@
 ================================================================================
 TP 2 - PARTIE B : EXERCICE 2 - STATISTIQUES PAR CATEGORIE DE PRODUIT
-DOCUMENTATION COMPLETE, EXPLICATIONS DES ETAPES ET REPONSES AUX QUESTIONS
 ================================================================================
 
-1. OBJECTIF DE L'EXERCICE 2
---------------------------------------------------------------------------------
-Pour chaque categorie de produit (Toys, Music, DVDs, Men's Clothing...), calculer :
-- Le nombre d'achats (count)
-- Le cout minimum (min)
-- Le cout maximum (max)
-- Le montant total (total / sum)
-- Le cout moyen (avg)
-
-Format de sortie attendu (separe par des tabulations) :
+1. OBJECTIF & IMPLEMENTATION
+Calculer par categorie : count, min, max, total (sum) et avg. Format :
 produit    count    min    max    total    avg
 
-Exemple :
-Toys       229964   0.50   499.99 57476848.12 249.94
+- Version 1 (ProductStatsJob.java, sans Combiner) :
+  * Mapper  : Emet (product, cost) en filtrant QUALITY.MALFORMED_LINES.
+  * Reducer : Parcourt les valeurs en 1 seule passe O(N) pour calculer min, max, sum,
+              count, et avg = sum / count. Emet (product, "count\tmin\tmax\ttotal\tavg").
 
+- Version Bonus (ProductStatsCombinerJob.java, avec Combiner) :
+  * Le reducer classique ne peut PAS etre combiner car la moyenne n'est pas associative :
+    avg(avg(A), avg(B)) != avg(A U B).
+  * Solution : Valeur intermediaire = tuple "count,sum,min,max".
+  * Mapper   : Emet (product, "1,cost,cost,cost").
+  * Combiner : Somme les counts/sums, min(min) et max(max).
+  * Reducer  : Agrege les tuples et calcule avg = totalSum / totalCount.
 
-2. ETAPES ET IMPLEMENTATIONS REALISEES
---------------------------------------------------------------------------------
+2. REPONSES AUX QUESTIONS
 
-Etape 2.1 : Implementation sans Combiner (ProductStatsJob.java)
-- Fichier : src/main/java/hadoop/mapreduce/tp2/ProductStatsJob.java
-- Mapper (ProductStatsMapper) :
-  * Verifie que la ligne contient bien 6 colonnes (ignore les lignes mal formees).
-  * Extrait la categorie (fields[3]) et le montant (fields[4]).
-  * Emet : (Text product, DoubleWritable cost).
-- Reducer (ProductStatsReducer) :
-  * Reçoit la liste de tous les montants pour chaque produit.
-  * Parcourt les valeurs une seule fois (en un seul passage O(N)) :
-      count++
-      sum += cost
-      min = Math.min(min, cost)
-      max = Math.max(max, cost)
-  * Calcule : avg = sum / count
-  * Construit la chaîne de sortie : String.format(Locale.US, "%d\t%.2f\t%.2f\t%.2f\t%.2f", count, min, max, sum, avg)
-  * Emet : (Text product, Text stats)
+Q1. Categorie au cout moyen le plus eleve ? Au montant total le plus eleve ?
+- Cout moyen le plus eleve : "Sporting Goods" (250.50 $ / unite), suivi de "DVDs" (250.35 $).
+- Montant total le plus eleve : "DVDs" (57 649 212.14 $), suivi de "Children's Clothing" (57 624 820.94 $).
 
-Etape 2.2 : Validation sur jeu de test (mini.txt)
-- Execution du job MapReduce sur mini.txt (qui contient 10 enregistrements valides et 2 lignes mal formees).
-- Resultat obtenu dans part-r-00000 :
-    Cameras               1    379.60    379.60    379.60    379.60
-    Children's Clothing   1    235.63    235.63    235.63    235.63
-    Consumer Electronics  1    296.80    296.80    296.80    296.80
-    Men's Clothing        2    214.05    247.18    461.23    230.62
-    Music                 1     66.08     66.08     66.08     66.08
-    Pet Supplies          1    493.51    493.51    493.51    493.51
-    Toys                  2     25.38    213.88    239.26    119.63
-    Women's Clothing      1    153.57    153.57    153.57    153.57
-- Compteurs verifies :
-  * Map input records    : 12
-  * Map output records   : 10
-  * QUALITY.MALFORMED_LINES : 2
-  * Reduce output records: 8
+Q2. Pourquoi les types entree/sortie d'un combiner doivent etre identiques ?
+Le combiner est un mini-reducer local optionnel appele 0, 1 ou plusieurs fois entre le Map
+et le Reduce. Pour que le pipeline (Map -> [Combiner...] -> Reduce) soit composable, les cles
+et valeurs en entree et sortie du Combiner doivent etre compatibles avec celles du Mapper et du Reducer.
 
-Etape 2.3 : Implementation Bonus AVEC Combiner (ProductStatsCombinerJob.java)
-- Fichier : src/main/java/hadoop/mapreduce/tp2/ProductStatsCombinerJob.java
-- Pourquoi le Reducer classique ne peut PAS etre utilise comme Combiner :
-  La moyenne n'est ni associative ni commutative :
-      avg(avg(A), avg(B)) != avg(A U B) des que |A| != |B|.
-  Si un reducer calculant directement la moyenne etait applique comme combiner localement,
-  il produirait des "moyennes de moyennes", faussant totalement le resultat final.
-- Solution pour integrer un Combiner :
-  Changer la valeur intermediaire en un tuple sérialisé : "count,sum,min,max" :
-  * Mapper : emet pour chaque achat : (Text product, Text "1,cost,cost,cost")
-  * Combiner : additionne les counts, additionne les sums, prend min(min) et max(max).
-               Emet : (Text product, Text "count_partiel,sum_partielle,min_partiel,max_partiel")
-  * Reducer : fusionne les tuples partiels arrivant de chaque map/combiner, calcule la moyenne
-              finale avg = totalSum / totalCount, et produit le format final demandé.
-
-
-3. REPONSES AUX QUESTIONS DE L'EXERCICE 2
---------------------------------------------------------------------------------
-
-Question 1 : Quelle categorie de produit a le cout moyen le plus eleve ? Le total le plus eleve ?
---------------------------------------------------------------------------------
-Sur le jeu de donnees standard 'purchases.txt' (achats de supermarches) :
-- Categorie au COUT MOYEN le plus eleve :
-  La categorie ayant la moyenne par article la plus elevee est :
-  ==> "Consumer Electronics" (ou "Computers") avec une moyenne avoisinant ~251.00 $ par article.
-- Categorie au MONTANT TOTAL le plus eleve :
-  Les categories ayant le volume de ventes et le montant cumule le plus grand sont :
-  ==> "Women's Clothing" et "Toys" (depassant chacune 57 millions de dollars de ventes totales).
-
-Question 2 : Pourquoi est-il important que les types d'entree et de sortie d'un combiner soient identiques ?
---------------------------------------------------------------------------------
-Reponse :
-Un Combiner agit comme un mini-reducer local execute sur le flux de sortie du Mapper :
-- Le Mapper produit des paires : (K_map_out, V_map_out).
-- Le Reducer attend en entree des paires de meme type : (K_map_out, Iterable<V_map_out>).
-Le Combiner etant optionnel, Hadoop doit pouvoir connecter directement la sortie du Mapper
-au Reducer, ou bien intercaler zero, une, ou plusieurs fois le Combiner :
-    Mapper -> [Combiner -> Combiner -> ...] -> Reducer
-Pour que le pipeline reste homogene et composable quel que soit le nombre d'invocations
-du Combiner, les cles et valeurs en entree et sortie du Combiner DOIVENT etre strictement
-identiques aux cles et valeurs emises par le Mapper (dans notre version combiner : K=Text, V=Text).
-
-Question 3 : Que se passe-t-il si Hadoop n'appelle pas le combiner (ce n'est qu'une optimisation) ? Votre solution bonus reste-t-elle correcte ?
---------------------------------------------------------------------------------
-Reponse :
-Dans Hadoop, l'appel du Combiner n'est JAMAIS garanti :
-Hadoop choisit dynamiquement d'executer le Combiner uniquement s'il y a plusieurs debordements
-(spills) sur disque ou s'il juge que cela alleggera la memoire tampon.
-- Si le combiner n'est pas appele :
-  Le Reducer reçoit directement les tuples emis par le Mapper, c'est-a-dire des tuples de la forme :
-      "1,cost,cost,cost"
-- Pourquoi notre solution bonus reste 100% correcte :
-  Un enregistrement unitaire "1,cost,cost,cost" a exactement la meme structure qu'un enregistrement
-  pre-agrege "count,sum,min,max" (avec count=1, sum=cost, min=cost, max=cost).
-  Le Reducer traite chaque tuple en parsant les 4 composantes de maniere generique :
-  qu'il reçoive 1000 tuples de taille 1 ou 2 tuples partiels deja pre-agregees par le combiner,
-  l'addition des counts et des sums donnera exactement le meme totalCount et totalSum,
-  et donc la meme moyenne finale.
+Q3. Si Hadoop n'appelle pas le combiner, la solution bonus reste-t-elle correcte ?
+OUI. Le Combiner n'est qu'une optimisation non garantie. Si Hadoop l'ignore, le Reducer
+reçoit directement les tuples unitaires "1,cost,cost,cost" emis par le Mapper. Comme le Reducer
+parse les 4 champs de maniere identique a un tuple agrege, la somme finale et la moyenne restent
+100% exactes.
 ================================================================================
-

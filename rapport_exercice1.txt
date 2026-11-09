@@ -1,167 +1,39 @@
 ================================================================================
-TP 2 - PARTIE B : EXERCICE 1 - NOMBRE DE TRANSACTIONS PAR MODE DE PAIEMENT
-(COMPTAGE + FILTRAGE + COMBINER)
-DOCUMENTATION COMPLETE, REPONSES AUX QUESTIONS ET ETAPES REALISEES
+TP 2 - PARTIE B : EXERCICE 1 - TRANSACTIONS PAR MODE DE PAIEMENT
 ================================================================================
 
-1. OBJECTIF ET SPECIFICATION DE L'EXERCICE 1
---------------------------------------------------------------------------------
-Objectif :
-Compter combien d'achats ont ete realises avec chaque mode de paiement
-(Visa, MasterCard, Amex, Discover, Cash...).
+1. OBJECTIF & IMPLEMENTATION (PaymentJob.java)
+- Mapper (PaymentMapper) : Valide 6 colonnes (sinon QUALITY.MALFORMED_LINES++). Emet (payment, 1).
+- Reducer / Combiner (SumReducer) : Somme les occurrences par mode de paiement.
+- Validite du Combiner : L'addition est associative et commutative (a + b = b + a),
+  donc pre-agreger localement ne change pas la somme finale.
 
-Specification :
-- Entree Mapper   : (LongWritable offset, Text line)
-- Sortie Mapper   : (Text payment, IntWritable 1)
-- Reducer         : Additionne les valeurs pour chaque mode de paiement (Text payment, IntWritable total).
-- Combiner        : Utilise la meme classe que le Reducer (SumReducer).
-- Filtrage qualite: Ignorer les lignes mal formees (nombre de champs != 6) et
-                    incrementer le compteur contextuel QUALITY.MALFORMED_LINES.
+2. REPONSES AUX QUESTIONS
 
+Q1. Sortie attendue sur mini.txt (10 valides, 2 malformees) :
+Amex        1
+Cash        2
+Discover    2
+MasterCard  2
+Visa        3
 
-2. ETAPES REALISEES ET CODE MIS EN PLACE
---------------------------------------------------------------------------------
-Fichier de code : src/main/java/hadoop/mapreduce/tp2/PaymentJob.java
+Q2. Types cle/valeur :
+- Intermediaires (Mapper/Combiner) : Cle = Text (payment), Valeur = IntWritable (1 ou sous-total)
+- Finales (Reducer)                : Cle = Text (payment), Valeur = IntWritable (total)
 
-Etape 2.1 : Implementation du Mapper (PaymentMapper)
-- Decoupe chaque ligne par tabulation : value.toString().split("\t")
-- Validation : si f.length != 6, incrementation de context.getCounter("QUALITY", "MALFORMED_LINES") et return.
-- Extraction : recupere f[5].trim() (le mode de paiement) et emet (payment, ONE).
+Q3. Taches Map sur purchases.txt :
+- 2 taches map lancees.
+- purchases.txt fait ~201.5 Mo. La taille de bloc HDFS est de 128 Mo.
+  Le fichier necessite donc ceil(201.5 / 128) = 2 blocs = 2 InputSplits = 2 Maps.
 
-Etape 2.2 : Implementation du Reducer / Combiner (SumReducer)
-- Pour chaque cle (Text payment), itere sur Iterable<IntWritable> values.
-- Calcule la somme de tous les 1.
-- Emet (payment, sum).
+Q4. Modification pour 3 Reducers (job.setNumReduceTasks(3)) :
+- Nombre de fichiers : 3 fichiers (part-r-00000, part-r-00001, part-r-00002).
+- Repartition HashPartitioner : partition = (key.hashCode() & Integer.MAX_VALUE) % 3
+  * Partition 0 (part-r-00000) : Amex (1), Cash (2), Discover (2)
+  * Partition 1 (part-r-00001) : (vide)
+  * Partition 2 (part-r-00002) : MasterCard (2), Visa (3)
 
-Etape 2.3 : Configuration du Driver (main)
-- Configure Job avec :
-    job.setMapperClass(PaymentMapper.class);
-    job.setCombinerClass(SumReducer.class);
-    job.setReducerClass(SumReducer.class);
-    job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(IntWritable.class);
-- Definit l'entree (FileInputFormat) et la sortie (FileOutputFormat).
-
-Etape 2.4 : Creation du fichier de test local
-- Fichier cree : src/main/resources/input/mini.txt
-- Contient 12 lignes au total :
-  * 10 lignes d'achats valides avec 6 champs.
-  * 2 lignes mal formees :
-      - Ligne 6 : ligne vide ("").
-      - Ligne 9 : ligne incomplete avec seulement 3 champs ("2012-01-01\t09:00\tCorpus Christi").
-
-
-3. REPONSES AUX QUESTIONS DE L'EXERCICE 1
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-Question 1 : Donnez la sortie attendue sur mini.txt avant d'executer le job.
---------------------------------------------------------------------------------
-Reponse :
-Avant execution, en comptant manuellement les 10 transactions valides :
-- Amex       : 1 fois  (ligne 1)
-- Cash       : 2 fois  (lignes 3, 10)
-- Discover   : 2 fois  (lignes 4, 11)
-- MasterCard : 2 fois  (lignes 5, 7)
-- Visa       : 3 fois  (lignes 2, 8, 12)
-
-Les 2 lignes mal formees (lignes 6 et 9) sont rejetees et declenchent MALFORMED_LINES=2.
-
-Sortie textuelle attendue :
-Amex	1
-Cash	2
-Discover	2
-MasterCard	2
-Visa	3
-
-Verification experimentale :
-Le job execute en local produit exactement cette sortie dans src/main/resources/output_local/part-r-00000.
-
-
---------------------------------------------------------------------------------
-Question 2 : Quels sont les types cle/valeur des donnees intermediaires ? Des donnees finales ?
---------------------------------------------------------------------------------
-Reponse :
-- Donnees intermediaires (sortie du Mapper / entree du Reducer) :
-  * Cle   : org.apache.hadoop.io.Text          (nom du mode de paiement, ex: "Visa")
-  * Valeur: org.apache.hadoop.io.IntWritable   (valeur 1 ou somme partielle emise par le combiner)
-
-- Donnees finales (sortie du Reducer ecrite dans HDFS) :
-  * Cle   : org.apache.hadoop.io.Text          (nom du mode de paiement)
-  * Valeur: org.apache.hadoop.io.IntWritable   (somme totale finale des achats)
-
-
---------------------------------------------------------------------------------
-Question 3 : Combien de taches map ont ete lancees sur purchases.txt ?
-             Reliez ce nombre au nombre de blocs HDFS vu en Partie A.
---------------------------------------------------------------------------------
-Reponse :
-- Nombre de taches Map lancees : 2 taches map.
-- Explication et lien avec la Partie A :
-  * Le fichier purchases.txt a une taille de 211 312 924 octets (~201.5 Mo).
-  * Dans la Partie A (A.3), la taille de bloc par defaut d'HDFS est de 128 Mo (134 217 728 octets).
-  * Le fichier occupe donc 2 blocs dans HDFS :
-      - Bloc 1 : 128 Mo (plein)
-      - Bloc 2 : ~73.5 Mo (le reste)
-  * Comme chaque bloc HDFS correspond par defaut a un InputSplit MapReduce, Hadoop lance
-    exactement 1 tache Map par split/bloc, soit exactement 2 taches Map.
-
-
---------------------------------------------------------------------------------
-Question 4 : Modifiez le driver pour utiliser 3 taches reduce (job.setNumReduceTasks(3)).
-             Combien de fichiers de sortie obtenez-vous ?
-             Comment les cles sont-elles reparties (HashPartitioner par defaut) ?
---------------------------------------------------------------------------------
-Reponse :
-- Nombre de fichiers de sortie obtenus :
-  On obtient exactement 3 fichiers de sortie dans le repertoire resultat :
-    * part-r-00000
-    * part-r-00001
-    * part-r-00002
-  (Car chaque tache reduce produit son propre fichier part-r-XXXXX).
-
-- Repartition des cles par le HashPartitioner :
-  Le partitionneur par defaut de MapReduce est HashPartitioner.
-  La formule utilisee pour determiner le numero de partition d'une cle est :
-      partition = (key.hashCode() & Integer.MAX_VALUE) % numReduceTasks
-
-  Pour numReduceTasks = 3 et pour les 5 cles (Text) :
-  * "Discover"   : hash % 3 = 0  ==> ecrit dans part-r-00000
-  * "Visa"       : hash % 3 = 1  ==> ecrit dans part-r-00001
-  * "Amex"       : hash % 3 = 2  ==> ecrit dans part-r-00002
-  * "Cash"       : hash % 3 = 2  ==> ecrit dans part-r-00002
-  * "MasterCard" : hash % 3 = 2  ==> ecrit dans part-r-00002
-
-  Observations :
-  - La repartition depend uniquement du hashCode de la cle Text.
-  - La partition 2 recoit 3 cles (Amex, Cash, MasterCard), la partition 1 recoit Visa,
-    et la partition 0 recoit Discover.
-
-
---------------------------------------------------------------------------------
-Explication supplementaire demandee dans la specification :
-Pourquoi l'utilisation du reducer comme combiner est-elle valide ici ?
---------------------------------------------------------------------------------
-Reponse :
-L'operation d'addition est a la fois associative et commutative :
-- Associative : (a + b) + c = a + (b + c)
-- Commutative : a + b = b + a
-Par consequent, calculer des sous-totaux partiels locaux au niveau de chaque tache Map
-avant d'envoyer les resultats au Reducer ne modifie en rien la somme totale finale.
-De plus, les types d'entree et de sortie du Mapper et du Reducer sont identiques :
-(Text, IntWritable) -> (Text, IntWritable), ce qui est la condition requise pour un Combiner.
-
-Comparaison des compteurs avec et sans combiner (sur purchases.txt) :
-- SANS Combiner :
-  * Map output records   : 4 138 476
-  * Reduce input records : 4 138 476  (4.1 millions d'enregistrements transferes via le reseau)
-  * Reduce shuffle bytes : ~45.5 Mo
-
-- AVEC Combiner :
-  * Map output records   : 4 138 476
-  * Combine output records : 10       (5 cles pre-agregees par map * 2 maps)
-  * Reduce input records : 10         (Seulement 10 enregistrements transferes via le reseau !)
-  * Reduce shuffle bytes : 142 octets
-Gain reseau : une reduction de plus de 99.99% du volume transite lors de la phase Shuffle.
+3. COMPTEURS YARN (Impact du Combiner sur purchases.txt)
+- Sans Combiner : 4 138 476 records transferes via shuffle (~45.5 Mo).
+- Avec Combiner : 10 records transferes (142 octets) -> Reduction de 99.99% du trafic reseau.
 ================================================================================
-
