@@ -1,0 +1,49 @@
+================================================================================
+TP 2 - PARTIE B : EXERCICE 3 - TOP 5 DES MAGASINS PAR VENTES TOTALES
+================================================================================
+
+1. OBJECTIF & IMPLEMENTATION (Conception A : Top5StoresJob.java)
+Trouver les 5 magasins au chiffre d'affaires le plus eleve.
+- Mapper      : Emet (store, cost) en ignorant les lignes mal formees.
+- SumCombiner : Somme localement les montants par magasin.
+  * Attention : Le combiner NE DOIT PAS filtrer le Top 5, car une elimination locale
+    fausserait le classement global d'un magasin reparti sur plusieurs blocs.
+- Top5Reducer : Reducer unique (setNumReduceTasks(1)).
+  * reduce()  : Somme le total par magasin et met a jour un TreeMap<Double, String> top
+                de taille limitee a 5 (remove(firstKey()) si size > 5).
+  * cleanup() : Ecrit les 5 magasins dans l'ordre decroissant (top.descendingMap()).
+
+Sortie obtenue sur mini.txt :
+Pittsburgh      493.51
+Austin          379.60
+Fort Worth      367.45
+New York        296.80
+Stockton        247.18
+
+2. REPONSES AUX QUESTIONS
+
+Q1. Probleme avec 3 taches reduce dans la Conception A ?
+Le HashPartitioner repartit les magasins sur les 3 reduceurs. Chaque reduceur produirait
+son propre "Top 5 local" dans cleanup() -> 3 fichiers de sortie contenant 15 magasins au total,
+sans aucun classement global.
+
+Q2. Complexite memoire du reducer & passage a l'echelle :
+- Complexite memoire : O(N) mots RAM (ou N=5), totalement independante du nombre de transactions
+  ou de magasins.
+- Passage a l'echelle : La RAM supporte 10M de magasins sans probleme, mais le reducer unique
+  devient un goulet d'etranglement CPU/temps. Pour de petits N (N=5), c'est tres efficace car
+  le Combiner a deja pre-reduit le volume.
+
+Q3. Comparaison Conception A (1 Job) vs Conception B (2 Jobs enchaînes) :
+- Conception A : 1 seul job, simple, E/S disque minimales (tout en shuffle). Ideale pour N petit.
+- Conception B : 2 jobs successifs (Job 1: somme distribuee sur K reduceurs ; Job 2: Top-N centralise).
+  Plus lourde en E/S (ecriture/lecture HDFS intermediaire), mais necessaire si des milliards de cles.
+
+Q4. Top 5 sur purchases.txt :
+1. Philadelphia (10 190 080.26 $)
+2. Durham       (10 153 890.21 $)
+3. Laredo       (10 144 604.98 $)
+4. Newark       (10 144 052.80 $)
+5. Cincinnati   (10 139 505.74 $)
+- Compteurs : 2 maps, 1 reduceur, Map output records = 4 138 476, Reduce input records = 309, Reduce output records = 5.
+================================================================================
